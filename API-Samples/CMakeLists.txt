@@ -275,7 +275,7 @@ set (S_TARGETS
     05-init_swapchain 06-init_depth_buffer 07-init_uniform_buffer
     08-init_pipeline_layout 09-init_descriptor_set 10-init_render_pass
     11-init_shaders 12-init_frame_buffers 13-init_vertex_buffer 14-init_pipeline 15-draw_cube
-    16-vulkan_1_1
+    16-vulkan_1_1 17-user_clip_plane
     enumerate_devices_adv init_texture multithreaded_command_buffers
     draw_textured_cube dynamic_uniform texel_buffer events
     instance_layer_properties instance_extension_properties
