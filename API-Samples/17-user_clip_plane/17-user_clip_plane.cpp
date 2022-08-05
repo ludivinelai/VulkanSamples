@@ -33,15 +33,71 @@ Draw Cube
 #define WINDOW_WIDTH 500
 #define WINDOW_HEIGHT 500
 #define DESC_SET_COUNT 2
-#define UNIFORM_DESC 0
+#define UNIFORM_DESC_ENABLE 1
+#define UNIFORM_MVP_IDX 0
+#define UNIFORM_PLANE_IDX 1
 
 /* We've setup cmake to process 15-draw_cube.vert and 15-draw_cube.frag                   */
 /* files containing the glsl shader code for this sample.  The generate-spirv script uses */
 /* glslangValidator to compile the glsl into spir-v and places the spir-v into a struct   */
 /* into a generated header file                                                           */
 
-#if UNIFORM_DESC
-VkResult init_uniform_descriptor(struct sample_info &info)
+#if UNIFORM_DESC_ENABLE
+void init_plane_uniform_buffer(struct sample_info &info, VkDescriptorBufferInfo *bufferInfo)
+{
+    VkResult U_ASSERT_ONLY res;
+    bool U_ASSERT_ONLY pass;
+    VkBuffer buf;
+    VkDeviceMemory mem;
+
+    glm::vec4 usePlane = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
+    
+    VkBufferCreateInfo buf_info = {};
+    buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buf_info.pNext = NULL;
+    buf_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    buf_info.size = sizeof(usePlane);
+    buf_info.queueFamilyIndexCount = 0;
+    buf_info.pQueueFamilyIndices = NULL;
+    buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    buf_info.flags = 0;
+    res = vkCreateBuffer(info.device, &buf_info, NULL, &buf);
+    assert(res == VK_SUCCESS);
+
+    VkMemoryRequirements mem_reqs;
+    vkGetBufferMemoryRequirements(info.device, buf, &mem_reqs);
+
+    VkMemoryAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.pNext = NULL;
+    alloc_info.memoryTypeIndex = 0;
+
+    alloc_info.allocationSize = mem_reqs.size;
+    pass = memory_type_from_properties(info, mem_reqs.memoryTypeBits,
+                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                       &alloc_info.memoryTypeIndex);
+    assert(pass && "No mappable, coherent memory");
+
+    res = vkAllocateMemory(info.device, &alloc_info, NULL, &mem);
+    assert(res == VK_SUCCESS);
+
+    uint8_t *pData;
+    res = vkMapMemory(info.device, mem, 0, mem_reqs.size, 0, (void **)&pData);
+    assert(res == VK_SUCCESS);
+
+    memcpy(pData, &usePlane, sizeof(usePlane));
+
+    vkUnmapMemory(info.device, mem);
+
+    res = vkBindBufferMemory(info.device, buf, mem, 0);
+    assert(res == VK_SUCCESS);
+
+    bufferInfo->buffer = buf;
+    bufferInfo->offset = 0;
+    bufferInfo->range = sizeof(usePlane);
+}
+
+static VkResult init_uniform_descriptor(struct sample_info &info)
 {
     VkResult res;
     int i;
@@ -51,7 +107,7 @@ VkResult init_uniform_descriptor(struct sample_info &info)
     // Create two layout to contain two uniform buffer data.
     VkDescriptorSetLayoutBinding uniform_binding[DESC_SET_COUNT] = {};
     for (i = 0; i < DESC_SET_COUNT; i++) {
-        uniform_binding[i].binding = 0;
+        uniform_binding[i].binding = i;
         uniform_binding[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         uniform_binding[i].descriptorCount = 1;
         uniform_binding[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
@@ -65,8 +121,10 @@ VkResult init_uniform_descriptor(struct sample_info &info)
     uniform_layout_info.pBindings = uniform_binding;
 
     // Create set, using createInfo
-    VkDescriptorSetLayout descriptor_layouts = {};
-    res = vkCreateDescriptorSetLayout(info.device, &uniform_layout_info, NULL, &descriptor_layouts);
+    VkDescriptorSetLayout descriptor_layouts[1] = {};
+    res = vkCreateDescriptorSetLayout(info.device, &uniform_layout_info, NULL, descriptor_layouts);
+    if (res)
+        return res;
 
     // Create pipeline layout with descriptor set
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
@@ -75,9 +133,71 @@ VkResult init_uniform_descriptor(struct sample_info &info)
     pipelineLayoutCreateInfo.pushConstantRangeCount = 0;
     pipelineLayoutCreateInfo.pPushConstantRanges = NULL;
     pipelineLayoutCreateInfo.setLayoutCount = 1;
-    pipelineLayoutCreateInfo.pSetLayouts = &descriptor_layouts;
+    pipelineLayoutCreateInfo.pSetLayouts = descriptor_layouts;
     res = vkCreatePipelineLayout(info.device, &pipelineLayoutCreateInfo, NULL, &info.pipeline_layout);
-    assert(res == VK_SUCCESS);
+    if (res)
+        return res;
+
+    /* 2. Create a single pool to contain data for our two descriptor sets */
+    VkDescriptorPoolSize type_count[1] = {};
+    type_count[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    type_count[0].descriptorCount = 2;
+
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.pNext = NULL;
+    pool_info.maxSets = 1;
+    pool_info.poolSizeCount = sizeof(type_count) / sizeof(VkDescriptorPoolSize);
+    pool_info.pPoolSizes = type_count;
+
+    VkDescriptorPool descriptor_pool[1] = {};
+    res = vkCreateDescriptorPool(info.device, &pool_info, NULL, descriptor_pool);
+    if (res)
+        return res;
+
+    VkDescriptorSetAllocateInfo alloc_info[1] = {};
+    alloc_info[0].sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info[0].pNext = NULL;
+    alloc_info[0].descriptorPool = descriptor_pool[0];
+    alloc_info[0].descriptorSetCount = 1;
+    alloc_info[0].pSetLayouts = descriptor_layouts;
+
+    // Populate descriptor sets
+    info.desc_set.resize(1);
+    res = vkAllocateDescriptorSets(info.device, alloc_info, info.desc_set.data());
+    if (res)
+        return res;
+
+    // Using empty brace initializer on the next line triggers a bug in older
+    // versions of gcc, so memset instead
+    VkWriteDescriptorSet descriptor_writes[DESC_SET_COUNT];
+    memset(descriptor_writes, 0, sizeof(descriptor_writes));
+
+    // TODO: Populate with info about our uniform buffer
+    descriptor_writes[0] = {};
+    descriptor_writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptor_writes[0].pNext = NULL;
+    descriptor_writes[0].dstSet = info.desc_set[0];
+    descriptor_writes[0].descriptorCount = 1;
+    descriptor_writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptor_writes[0].pBufferInfo = &info.uniform_data.buffer_info; // populated by init_uniform_buffer()
+    descriptor_writes[0].dstArrayElement = 0;
+    descriptor_writes[0].dstBinding = 0;
+
+    VkDescriptorBufferInfo bufferInfo;
+    init_plane_uniform_buffer(info, &bufferInfo);
+
+    descriptor_writes[1] = {};
+    descriptor_writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptor_writes[1].pNext = NULL;
+    descriptor_writes[1].dstSet = info.desc_set[0];
+    descriptor_writes[1].descriptorCount = 1;
+    descriptor_writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptor_writes[1].pBufferInfo = &bufferInfo; // populated by init_plane_uniform_buffer()
+    descriptor_writes[1].dstArrayElement = 0;
+    descriptor_writes[1].dstBinding = 1;
+
+    vkUpdateDescriptorSets(info.device, DESC_SET_COUNT, descriptor_writes, 0, NULL);
 
     return res;
 }
@@ -119,13 +239,12 @@ VkResult VK_init(struct sample_info &info) {
     init_framebuffers(info, depthPresent);
     init_vertex_buffer(info, g_vb_solid_face_colors_Data, sizeof(g_vb_solid_face_colors_Data),
                        sizeof(g_vb_solid_face_colors_Data[0]), false);
-#if UNIFORM_DESC
+#if UNIFORM_DESC_ENABLE
     res = init_uniform_descriptor(info);
 #else
     init_descriptor_and_pipeline_layouts(info, false);
     init_descriptor_pool(info, false);
     init_descriptor_set(info, false);
-    std::cout << "!!!!!" << std::endl;
 #endif
 
     init_pipeline_cache(info);
