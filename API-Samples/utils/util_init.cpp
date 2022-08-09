@@ -1054,9 +1054,9 @@ void init_uniform_buffer(struct sample_info &info) {
         fov *= static_cast<float>(info.height) / static_cast<float>(info.width);
     }
     info.Projection = glm::perspective(fov, static_cast<float>(info.width) / static_cast<float>(info.height), 0.1f, 100.0f);
-    info.View = glm::lookAt(glm::vec3(-5, 3, -10),  // Camera is at (-5,3,-10), in World Space
+    info.View = glm::lookAt(glm::vec3(20, 15, -10),  // Camera is at (-5,3,-10), in World Space
                             glm::vec3(0, 0, 0),     // and looks at the origin
-                            glm::vec3(0, -1, 0)     // Head is up (set to 0,-1,0 to look upside-down)
+                            glm::vec3(0, 1, 0)     // Head is up (set to 0,-1,0 to look upside-down)
     );
     info.Model = glm::mat4(1.0f);
     // Vulkan clip space has inverted Y and half Z.
@@ -1555,7 +1555,7 @@ void init_pipeline(struct sample_info &info, VkBool32 include_depth, VkBool32 in
     rs.pNext = NULL;
     rs.flags = 0;
     rs.polygonMode = VK_POLYGON_MODE_FILL;
-    rs.cullMode = VK_CULL_MODE_BACK_BIT;
+    rs.cullMode = VK_CULL_MODE_FRONT_BIT;
     rs.frontFace = VK_FRONT_FACE_CLOCKWISE;
     rs.depthClampEnable = VK_FALSE;
     rs.rasterizerDiscardEnable = VK_FALSE;
@@ -1746,7 +1746,7 @@ void init_image(struct sample_info &info, texture_object &texObj, const char *te
     std::string filename = get_base_data_dir();
 
     if (textureName == nullptr)
-        filename.append("lunarg.ppm");
+        filename.append("321.ppm");
     else
         filename.append(textureName);
 
@@ -1754,7 +1754,7 @@ void init_image(struct sample_info &info, texture_object &texObj, const char *te
         std::cout << "Try relative path\n";
         filename = "../../API-Samples/data/";
         if (textureName == nullptr)
-            filename.append("lunarg.ppm");
+            filename.append("321.ppm");
         else
             filename.append(textureName);
         if (!read_ppm(filename.c_str(), texObj.tex_width, texObj.tex_height, 0, NULL)) {

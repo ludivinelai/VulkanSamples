@@ -30,17 +30,61 @@ Draw Cube
 #include <cstdlib>
 #include "cube_data.h"
 
+#define TINYOBJLOADER_IMPLEMENTATION
+
+#include <tiny_obj_loader.h>
+
 #define WINDOW_WIDTH 500
 #define WINDOW_HEIGHT 500
-#define DESC_SET_COUNT 2
+#define BINDING_COUNT 3
 #define UNIFORM_DESC_ENABLE 1
 #define UNIFORM_MVP_IDX 0
 #define UNIFORM_PLANE_IDX 1
+#define SCALE_RATE (0.6f)
 
 /* We've setup cmake to process 15-draw_cube.vert and 15-draw_cube.frag                   */
 /* files containing the glsl shader code for this sample.  The generate-spirv script uses */
 /* glslangValidator to compile the glsl into spir-v and places the spir-v into a struct   */
 /* into a generated header file                                                           */
+
+const std::string MODEL_PATH = "../../API-Samples/data/bigunfinal.obj";
+
+std::vector<VertexUV> vertices;
+std::vector<uint32_t> indices;
+
+void loadModel() {
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn, err;
+    std::cout << "Load model begin!\n";
+
+/*     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
+        throw std::runtime_error(warn + err);
+    } */
+    tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str());
+
+    std::cout << "Load model succeed!\n";
+
+    for (const auto& shape : shapes) {
+        for (const auto& index : shape.mesh.indices) {
+            VertexUV vertex{};
+
+            vertex.posX = attrib.vertices[3 * index.vertex_index + 0] * SCALE_RATE;
+            vertex.posY = attrib.vertices[3 * index.vertex_index + 1] * SCALE_RATE;
+            vertex.posZ = attrib.vertices[3 * index.vertex_index + 2] * SCALE_RATE;
+            vertex.posW = 1.f;
+
+            vertex.u = attrib.texcoords[2 * index.texcoord_index + 0];
+            vertex.v = 1.0f - attrib.texcoords[2 * index.texcoord_index + 1];
+
+            vertices.push_back(vertex);
+            indices.push_back(indices.size());
+        }
+    }
+
+    std::cout << "Load model complete!\n";
+}
 
 #if UNIFORM_DESC_ENABLE
 void init_plane_uniform_buffer(struct sample_info &info, VkDescriptorBufferInfo *bufferInfo)
@@ -50,7 +94,7 @@ void init_plane_uniform_buffer(struct sample_info &info, VkDescriptorBufferInfo 
     VkBuffer buf;
     VkDeviceMemory mem;
 
-    glm::vec4 usePlane = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
+    glm::vec4 usePlane = glm::vec4(0.0f, -1.0f, 0.0f, 6.0f);
     
     VkBufferCreateInfo buf_info = {};
     buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -105,8 +149,8 @@ static VkResult init_uniform_descriptor(struct sample_info &info)
     /* 1. Create descriptor layout and pipeline layout */
 
     // Create two layout to contain two uniform buffer data.
-    VkDescriptorSetLayoutBinding uniform_binding[DESC_SET_COUNT] = {};
-    for (i = 0; i < DESC_SET_COUNT; i++) {
+    VkDescriptorSetLayoutBinding uniform_binding[BINDING_COUNT] = {};
+    for (i = 0; i < 2; i++) {
         uniform_binding[i].binding = i;
         uniform_binding[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         uniform_binding[i].descriptorCount = 1;
@@ -114,10 +158,16 @@ static VkResult init_uniform_descriptor(struct sample_info &info)
         uniform_binding[i].pImmutableSamplers = NULL;
     }
 
-    VkDescriptorSetLayoutCreateInfo uniform_layout_info = {}; // array or variable???   
+    uniform_binding[2].binding = 2;
+    uniform_binding[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    uniform_binding[2].descriptorCount = 1;
+    uniform_binding[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    uniform_binding[2].pImmutableSamplers = NULL;
+
+    VkDescriptorSetLayoutCreateInfo uniform_layout_info = {};
     uniform_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     uniform_layout_info.pNext = NULL;
-    uniform_layout_info.bindingCount = DESC_SET_COUNT;
+    uniform_layout_info.bindingCount = BINDING_COUNT;
     uniform_layout_info.pBindings = uniform_binding;
 
     // Create set, using createInfo
@@ -139,9 +189,11 @@ static VkResult init_uniform_descriptor(struct sample_info &info)
         return res;
 
     /* 2. Create a single pool to contain data for our two descriptor sets */
-    VkDescriptorPoolSize type_count[1] = {};
+    VkDescriptorPoolSize type_count[2] = {};
     type_count[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     type_count[0].descriptorCount = 2;
+    type_count[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    type_count[1].descriptorCount = 1;
 
     VkDescriptorPoolCreateInfo pool_info = {};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -170,7 +222,7 @@ static VkResult init_uniform_descriptor(struct sample_info &info)
 
     // Using empty brace initializer on the next line triggers a bug in older
     // versions of gcc, so memset instead
-    VkWriteDescriptorSet descriptor_writes[DESC_SET_COUNT];
+    VkWriteDescriptorSet descriptor_writes[BINDING_COUNT];
     memset(descriptor_writes, 0, sizeof(descriptor_writes));
 
     // TODO: Populate with info about our uniform buffer
@@ -197,7 +249,16 @@ static VkResult init_uniform_descriptor(struct sample_info &info)
     descriptor_writes[1].dstArrayElement = 0;
     descriptor_writes[1].dstBinding = 1;
 
-    vkUpdateDescriptorSets(info.device, DESC_SET_COUNT, descriptor_writes, 0, NULL);
+    descriptor_writes[2] = {};
+    descriptor_writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptor_writes[2].dstSet = info.desc_set[0];
+    descriptor_writes[2].dstBinding = 2;
+    descriptor_writes[2].descriptorCount = 1;
+    descriptor_writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    descriptor_writes[2].pImageInfo = &info.texture_data.image_info;
+    descriptor_writes[2].dstArrayElement = 0;
+
+    vkUpdateDescriptorSets(info.device, BINDING_COUNT, descriptor_writes, 0, NULL);
 
     return res;
 }
@@ -226,6 +287,10 @@ VkResult VK_init(struct sample_info &info) {
     init_device_queue(info);
     init_swap_chain(info);
     init_depth_buffer(info);
+
+    loadModel();
+
+    init_texture(info);
     init_uniform_buffer(info); // set up info.MVP and info.uniform_data
     init_renderpass(info, depthPresent);
 #include "17-user_clip_plane.vert.h"
@@ -237,8 +302,9 @@ VkResult VK_init(struct sample_info &info) {
     frag_info.pCode = __user_clip_plane_frag;
     init_shaders(info, &vert_info, &frag_info);
     init_framebuffers(info, depthPresent);
-    init_vertex_buffer(info, g_vb_solid_face_colors_Data, sizeof(g_vb_solid_face_colors_Data),
-                       sizeof(g_vb_solid_face_colors_Data[0]), false);
+
+    init_vertex_buffer(info, vertices.data(), vertices.size() * sizeof(VertexUV), sizeof(vertices[0]), true);
+    std::cout << vertices.size() << std::endl;
 #if UNIFORM_DESC_ENABLE
     res = init_uniform_descriptor(info);
 #else
@@ -287,10 +353,10 @@ int sample_main(int argc, char *argv[]) {
     /* VULKAN_KEY_START */
     while (frame_loop) {
         VkClearValue clear_values[2];
-        clear_values[0].color.float32[0] = 0.2f;
-        clear_values[0].color.float32[1] = 0.2f;
-        clear_values[0].color.float32[2] = 0.2f;
-        clear_values[0].color.float32[3] = 0.2f;
+        clear_values[0].color.float32[0] = 1.0f;
+        clear_values[0].color.float32[1] = 1.0f;
+        clear_values[0].color.float32[2] = 1.0f;
+        clear_values[0].color.float32[3] = 1.0f;
         clear_values[1].depthStencil.depth = 1.0f;
         clear_values[1].depthStencil.stencil = 0;
         
@@ -335,7 +401,7 @@ int sample_main(int argc, char *argv[]) {
         init_viewports(info);
         init_scissors(info);
 
-        vkCmdDraw(info.cmd, 12 * 3, 1, 0, 0);
+        vkCmdDraw(info.cmd, vertices.size(), 1, 0, 0);
         vkCmdEndRenderPass(info.cmd);
         res = vkEndCommandBuffer(info.cmd);
         const VkCommandBuffer cmd_bufs[] = {info.cmd};
