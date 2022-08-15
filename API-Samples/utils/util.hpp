@@ -232,6 +232,10 @@ struct sample_info {
     glm::mat4 Clip;
     glm::mat4 MVP;
 
+    float angle_x_delta;
+    float angle_y_delta;
+    float angle_z_delta;
+
     VkCommandBuffer cmd; // Buffer for initialization commands
     VkPipelineLayout pipeline_layout;
     std::vector<VkDescriptorSetLayout> desc_layout;

@@ -42,6 +42,7 @@ VkResult init_enumerate_device(struct sample_info &info,
 VkBool32 demo_check_layers(const std::vector<layer_properties> &layer_props,
                            const std::vector<const char *> &layer_names);
 void init_connection(struct sample_info &info);
+void UsedRawInput(LPARAM lParam, struct sample_info &info);
 void init_window(struct sample_info &info);
 void init_queue_family_index(struct sample_info &info);
 void init_presentable_image(struct sample_info &info);

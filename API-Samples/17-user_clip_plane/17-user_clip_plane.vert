@@ -16,7 +16,7 @@ layout (location = 1) in vec2 inTexCoords;
 layout (location = 0) out vec2 texcoord;
 layout (location = 1) out float v_clipDist;
 layout (location = 2) out vec4 outPlane;
-layout (location = 3) out mat4 outMVP;
+layout (location = 3) out vec4 outPos;
 
 void main() {
     gl_Position = myBufferVals.mvp * pos;
@@ -24,5 +24,4 @@ void main() {
     texcoord = inTexCoords;
 
     outPlane = uClipPlane.plane;
-    outMVP = myBufferVals.mvp;
 }

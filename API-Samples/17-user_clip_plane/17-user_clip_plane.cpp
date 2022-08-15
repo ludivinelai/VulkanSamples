@@ -31,7 +31,6 @@ Draw Cube
 #include "cube_data.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
-
 #include <tiny_obj_loader.h>
 
 #define WINDOW_WIDTH 500
@@ -59,11 +58,7 @@ void loadModel() {
     std::string warn, err;
     std::cout << "Load model begin!\n";
 
-/*     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
-        throw std::runtime_error(warn + err);
-    } */
     tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str());
-
     std::cout << "Load model succeed!\n";
 
     for (const auto& shape : shapes) {
@@ -264,6 +259,55 @@ static VkResult init_uniform_descriptor(struct sample_info &info)
 }
 #endif
 
+void getKeyboardInputForAngle(struct sample_info &info)
+{
+    MSG msg;
+
+    GetMessage(&msg, nullptr, 0, 0);
+    if (msg.message == WM_INPUT) {
+        UsedRawInput(msg.lParam, info);
+        if (GET_RAWINPUT_CODE_WPARAM(msg.wParam) == RIM_INPUT)
+            DispatchMessage(&msg);
+    }
+    else {
+        DispatchMessage(&msg);
+    }
+
+/*     std::cout << "angle_x_delta = " << info.angle_x_delta << std::endl;
+    std::cout << "angle_y_delta = " << info.angle_y_delta << std::endl;
+ */
+}
+
+void updateUniformMap(struct sample_info &info)
+{
+    float fov = glm::radians(45.0f);
+    if (info.width > info.height) {
+        fov *= static_cast<float>(info.height) / static_cast<float>(info.width);
+    }
+    info.Projection = glm::perspective(fov, static_cast<float>(info.width) / static_cast<float>(info.height), 0.1f, 100.0f);
+    info.View = glm::lookAt(glm::vec3(20, 15, -10),  // Camera is at (20, 15, -10), in World Space
+                            glm::vec3(0, 0, 0),     // and looks at the origin
+                            glm::vec3(0, 1, 0)     // Head is up (set to 0,-1,0 to look upside-down)
+    );
+    info.View = glm::rotate(info.View, glm::radians(info.angle_x_delta), glm::vec3(1, 0, 0));
+    info.View = glm::rotate(info.View, glm::radians(info.angle_y_delta), glm::vec3(0, 1, 0));
+    info.View = glm::rotate(info.View, glm::radians(info.angle_z_delta), glm::vec3(0, 0, 1));
+
+    info.Model = glm::mat4(1.0f);
+    // Vulkan clip space has inverted Y and half Z.
+    info.Clip = glm::mat4(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.5f, 1.0f);
+
+    info.MVP = info.Clip * info.Projection * info.View * info.Model;
+
+    uint8_t *pData;
+    int res = vkMapMemory(info.device, info.uniform_data.mem, 0, sizeof(info.MVP), 0, (void **)&pData);
+    assert(res == VK_SUCCESS);
+
+    memcpy(pData, &info.MVP, sizeof(info.MVP));
+
+    vkUnmapMemory(info.device, info.uniform_data.mem);
+}
+
 VkResult VK_init(struct sample_info &info) {
     VkResult res = VK_SUCCESS;
     const bool depthPresent = true;
@@ -344,7 +388,7 @@ int sample_main(int argc, char *argv[]) {
     VkSemaphore imageAcquiredSemaphore = {};
     VkFence drawFence = {};
     bool first_fence = true;
-    bool frame_loop = true;
+    int frame_loop = 1;
 
     process_command_line_args(info, argc, argv);
     res = VK_init(info);
@@ -371,9 +415,10 @@ int sample_main(int argc, char *argv[]) {
         // Get the index of the next available swapchain image:
         res = vkAcquireNextImageKHR(info.device, info.swap_chain, UINT64_MAX, imageAcquiredSemaphore, VK_NULL_HANDLE,
                                     &info.current_buffer);
-        // TODO: Deal with the VK_SUBOPTIMAL_KHR and VK_ERROR_OUT_OF_DATE_KHR
-        // return codes
         assert(res == VK_SUCCESS);
+
+        getKeyboardInputForAngle(info);
+        updateUniformMap(info);
 
         execute_begin_command_buffer(info); // vkBeginCommandBuffer
 

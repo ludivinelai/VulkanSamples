@@ -35,6 +35,13 @@ samples "init" utility functions
 
 using namespace std;
 
+#define VK_W 87
+#define VK_A 65
+#define VK_S 83
+#define VK_D 68
+#define VK_Q 81
+#define VK_E 69
+
 /*
  * TODO: function description here
  */
@@ -429,6 +436,50 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     return (DefWindowProc(hWnd, uMsg, wParam, lParam));
 }
 
+static void RegisterKeyboardRawInput(HWND handle) {
+    RAWINPUTDEVICE rid;
+
+    rid.usUsagePage = 0x01;
+    rid.usUsage = 0x06;
+    rid.dwFlags = RIDEV_INPUTSINK;
+    rid.hwndTarget = handle;
+
+    RegisterRawInputDevices(&rid, 1, sizeof(rid));
+}
+
+void UsedRawInput(LPARAM lParam, struct sample_info &info) {
+    char buffer[1024];
+
+    UINT dwSize = 1024;
+    GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT, buffer, &dwSize, sizeof(RAWINPUTHEADER));
+
+    auto raw = reinterpret_cast<RAWINPUT*>(buffer);
+    if (raw->header.dwType == RIM_TYPEKEYBOARD)
+        // std::cout << "raw key board input " << raw->data.keyboard.VKey << std::endl;
+        switch(raw->data.keyboard.VKey) {
+            case VK_W:
+                info.angle_z_delta++;
+                break;
+            case VK_S:
+                info.angle_z_delta--;
+                break;
+            case VK_D:
+                info.angle_y_delta++;
+                break;
+            case VK_A:
+                info.angle_y_delta--;
+                break;
+            case VK_Q:
+                info.angle_x_delta++;
+                break;
+            case VK_E:
+                info.angle_x_delta--;
+                break;
+            default:
+                break;
+        }
+}
+
 void init_window(struct sample_info &info) {
     WNDCLASSEX win_class;
     assert(info.width > 0);
@@ -478,6 +529,7 @@ void init_window(struct sample_info &info) {
         fflush(stdout);
         exit(1);
     }
+    RegisterKeyboardRawInput(info.window);
     SetWindowLongPtr(info.window, GWLP_USERDATA, (LONG_PTR)&info);
 }
 
@@ -1372,6 +1424,8 @@ void init_vertex_buffer(struct sample_info &info, const void *vertexData, uint32
 
     VkMemoryRequirements mem_reqs;
     vkGetBufferMemoryRequirements(info.device, info.vertex_buffer.buf, &mem_reqs);
+
+    std::cout << "mem_reqs.typebit = " << mem_reqs.memoryTypeBits << std::endl;
 
     VkMemoryAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;

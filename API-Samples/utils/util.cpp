@@ -119,6 +119,7 @@ bool memory_type_from_properties(struct sample_info &info, uint32_t typeBits, Vk
         }
         typeBits >>= 1;
     }
+    std::cout << "typeBit = " << typeBits << std::endl;
     // No memory types matched, return failure
     return false;
 }
