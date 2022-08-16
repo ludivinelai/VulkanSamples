@@ -215,6 +215,12 @@ struct sample_info {
     } uniform_data;
 
     struct {
+        VkBuffer buf;
+        VkDeviceMemory mem;
+        VkDescriptorBufferInfo buffer_info;
+    } clip_plane_data;
+
+    struct {
         VkDescriptorImageInfo image_info;
     } texture_data;
 
@@ -235,6 +241,7 @@ struct sample_info {
     float angle_x_delta;
     float angle_y_delta;
     float angle_z_delta;
+    bool clip_enable;
 
     VkCommandBuffer cmd; // Buffer for initialization commands
     VkPipelineLayout pipeline_layout;

@@ -41,6 +41,8 @@ using namespace std;
 #define VK_D 68
 #define VK_Q 81
 #define VK_E 69
+#define VK_C 67
+#define VK_X 88
 
 /*
  * TODO: function description here
@@ -474,6 +476,12 @@ void UsedRawInput(LPARAM lParam, struct sample_info &info) {
                 break;
             case VK_E:
                 info.angle_x_delta--;
+                break;
+            case VK_C:
+                info.clip_enable = true;
+                break;
+            case VK_X:
+                info.clip_enable = false;
                 break;
             default:
                 break;

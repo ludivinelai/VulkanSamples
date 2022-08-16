@@ -86,8 +86,8 @@ void init_plane_uniform_buffer(struct sample_info &info, VkDescriptorBufferInfo 
 {
     VkResult U_ASSERT_ONLY res;
     bool U_ASSERT_ONLY pass;
-    VkBuffer buf;
-    VkDeviceMemory mem;
+/*     VkBuffer buf;
+    VkDeviceMemory mem; */
 
     glm::vec4 usePlane = glm::vec4(0.0f, -1.0f, 0.0f, 6.0f);
     
@@ -100,11 +100,11 @@ void init_plane_uniform_buffer(struct sample_info &info, VkDescriptorBufferInfo 
     buf_info.pQueueFamilyIndices = NULL;
     buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     buf_info.flags = 0;
-    res = vkCreateBuffer(info.device, &buf_info, NULL, &buf);
+    res = vkCreateBuffer(info.device, &buf_info, NULL, &info.clip_plane_data.buf);
     assert(res == VK_SUCCESS);
 
     VkMemoryRequirements mem_reqs;
-    vkGetBufferMemoryRequirements(info.device, buf, &mem_reqs);
+    vkGetBufferMemoryRequirements(info.device, info.clip_plane_data.buf, &mem_reqs);
 
     VkMemoryAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -117,23 +117,23 @@ void init_plane_uniform_buffer(struct sample_info &info, VkDescriptorBufferInfo 
                                        &alloc_info.memoryTypeIndex);
     assert(pass && "No mappable, coherent memory");
 
-    res = vkAllocateMemory(info.device, &alloc_info, NULL, &mem);
+    res = vkAllocateMemory(info.device, &alloc_info, NULL, &info.clip_plane_data.mem);
     assert(res == VK_SUCCESS);
 
     uint8_t *pData;
-    res = vkMapMemory(info.device, mem, 0, mem_reqs.size, 0, (void **)&pData);
+    res = vkMapMemory(info.device, info.clip_plane_data.mem, 0, mem_reqs.size, 0, (void **)&pData);
     assert(res == VK_SUCCESS);
 
     memcpy(pData, &usePlane, sizeof(usePlane));
 
-    vkUnmapMemory(info.device, mem);
+    vkUnmapMemory(info.device, info.clip_plane_data.mem);
 
-    res = vkBindBufferMemory(info.device, buf, mem, 0);
+    res = vkBindBufferMemory(info.device, info.clip_plane_data.buf, info.clip_plane_data.mem, 0);
     assert(res == VK_SUCCESS);
 
-    bufferInfo->buffer = buf;
-    bufferInfo->offset = 0;
-    bufferInfo->range = sizeof(usePlane);
+    info.clip_plane_data.buffer_info.buffer = info.clip_plane_data.buf;
+    info.clip_plane_data.buffer_info.offset = 0;
+    info.clip_plane_data.buffer_info.range = sizeof(usePlane);
 }
 
 static VkResult init_uniform_descriptor(struct sample_info &info)
@@ -240,7 +240,7 @@ static VkResult init_uniform_descriptor(struct sample_info &info)
     descriptor_writes[1].dstSet = info.desc_set[0];
     descriptor_writes[1].descriptorCount = 1;
     descriptor_writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    descriptor_writes[1].pBufferInfo = &bufferInfo; // populated by init_plane_uniform_buffer()
+    descriptor_writes[1].pBufferInfo = &info.clip_plane_data.buffer_info; // populated by init_plane_uniform_buffer()
     descriptor_writes[1].dstArrayElement = 0;
     descriptor_writes[1].dstBinding = 1;
 
@@ -280,6 +280,8 @@ void getKeyboardInputForAngle(struct sample_info &info)
 
 void updateUniformMap(struct sample_info &info)
 {
+    glm::vec4 usePlane;
+    
     float fov = glm::radians(45.0f);
     if (info.width > info.height) {
         fov *= static_cast<float>(info.height) / static_cast<float>(info.width);
@@ -306,6 +308,18 @@ void updateUniformMap(struct sample_info &info)
     memcpy(pData, &info.MVP, sizeof(info.MVP));
 
     vkUnmapMemory(info.device, info.uniform_data.mem);
+
+    uint8_t *pData2;
+    usePlane = glm::vec4(0.0f, -1.0f, 0.0f, 16.0f);
+    if (info.clip_enable)
+        usePlane = glm::vec4(0.0f, -1.0f, 0.0f, 6.0f);
+
+    res = vkMapMemory(info.device, info.clip_plane_data.mem, 0, sizeof(usePlane), 0, (void **)&pData2);
+    assert(res == VK_SUCCESS);
+
+    memcpy(pData2, &usePlane, sizeof(usePlane));
+
+    vkUnmapMemory(info.device, info.clip_plane_data.mem);
 }
 
 VkResult VK_init(struct sample_info &info) {
