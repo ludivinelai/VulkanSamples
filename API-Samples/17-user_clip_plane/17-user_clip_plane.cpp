@@ -33,8 +33,8 @@ Draw Cube
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
-#define WINDOW_WIDTH 500
-#define WINDOW_HEIGHT 500
+#define WINDOW_WIDTH 512
+#define WINDOW_HEIGHT 512
 #define BINDING_COUNT 3
 #define UNIFORM_DESC_ENABLE 1
 #define UNIFORM_MVP_IDX 0
@@ -86,8 +86,6 @@ void init_plane_uniform_buffer(struct sample_info &info, VkDescriptorBufferInfo 
 {
     VkResult U_ASSERT_ONLY res;
     bool U_ASSERT_ONLY pass;
-/*     VkBuffer buf;
-    VkDeviceMemory mem; */
 
     glm::vec4 usePlane = glm::vec4(0.0f, -1.0f, 0.0f, 6.0f);
     
@@ -272,10 +270,6 @@ void getKeyboardInputForAngle(struct sample_info &info)
     else {
         DispatchMessage(&msg);
     }
-
-/*     std::cout << "angle_x_delta = " << info.angle_x_delta << std::endl;
-    std::cout << "angle_y_delta = " << info.angle_y_delta << std::endl;
- */
 }
 
 void updateUniformMap(struct sample_info &info)
